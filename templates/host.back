@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kahoot Clone - Host</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f2f2f2; margin: 0; padding: 0; }
+        
+        /* Layout Containers */
+        .view-section { display: none; padding: 20px; height: 100vh; box-sizing: border-box;}
+        #lobby-view { display: block; background: #46178f; color: white; }
+        #question-view { background: white; }
+        #leaderboard-view { background: #3e147f; color: white; }
+
+        /* Timer */
+        #timer-circle {
+            width: 80px; height: 80px; border-radius: 50%; 
+            background: #864cbf; color: white; font-size: 2.5em; 
+            line-height: 80px; margin: 20px auto; 
+        }
+
+        /* Question Styles */
+        #question-text { font-size: 2.5em; margin-bottom: 30px; }
+        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; height: 50vh; }
+        .opt { display: flex; align-items: center; justify-content: center; color: white; font-size: 2em; font-weight: bold; border-radius: 5px;}
+        
+        .A { background: #e21b3c; } .B { background: #1368ce; }
+        .C { background: #d89e00; } .D { background: #26890c; }
+        
+        /* Dim incorrect answers during reveal */
+        .dimmed { opacity: 0.2; }
+
+        /* Footer / Status Bar */
+        #status-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            background: #333; color: white; padding: 15px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        button#main-btn {
+            padding: 10px 20px; font-size: 1.2em; cursor: pointer;
+            background: #fff; border: none; border-radius: 4px; color: #333;
+        }
+
+        /* Leaderboard Styles */
+        .lb-entry {
+            background: rgba(255,255,255,0.1); margin: 10px auto; 
+            padding: 15px; width: 60%; font-size: 1.5em;
+            display: flex; justify-content: space-between; border-radius: 5px;
+        }
+        .lb-name { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-view" class="view-section">
+        <h1>Join at IP:5000</h1>
+        <h2>Waiting for players...</h2>
+        <div id="lobby-player-list" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
+    </div>
+
+    <div id="question-view" class="view-section">
+        <div id="question-text">Question goes here...</div>
+        <div id="timer-circle">30</div>
+        
+        <div class="options" id="options-display">
+            <div class="opt A" id="optA"></div>
+            <div class="opt B" id="optB"></div>
+            <div class="opt C" id="optC"></div>
+            <div class="opt D" id="optD"></div>
+        </div>
+    </div>
+
+    <div id="leaderboard-view" class="view-section">
+        <h1>Leaderboard</h1>
+        <div id="lb-list"></div>
+    </div>
+
+    <div id="status-bar">
+        <div id="answer-count">Answers: 0</div>
+        <button id="main-btn" onclick="handleMainButton()">Start Game</button>
+    </div>
+<script>
+        const socket = io();
+        let timerInterval;
+        let gameState = 'lobby'; 
+        
+        // --- AUDIO SETUP ---
+        // We create the audio object once. 
+        // Ensure 'music.mp3' exists in your 'static' folder.
+        const bgMusic = new Audio('/static/music.mp3');
+        bgMusic.loop = true;  // Loop if the question is long
+        bgMusic.volume = 0.5; // Set volume (0.0 to 1.0)
+
+        // --- Navigation Logic ---
+        function handleMainButton() {
+            const btn = document.getElementById('main-btn');
+
+            if (gameState === 'lobby') {
+                socket.emit('next_question');
+            } 
+            else if (gameState === 'question') {
+                socket.emit('time_up');
+            }
+            else if (gameState === 'results') {
+                socket.emit('request_leaderboard');
+            }
+            else if (gameState === 'leaderboard') {
+                socket.emit('next_question');
+            }
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
+            document.getElementById(viewId).style.display = 'block';
+        }
+
+        // --- Socket Events ---
+
+        socket.on('update_player_list', (players) => {
+            if(gameState !== 'lobby') return;
+            const list = document.getElementById('lobby-player-list');
+            list.innerHTML = "";
+            for (let id in players) {
+                let div = document.createElement('div');
+                div.innerText = players[id].name;
+                div.style.margin = "10px"; div.style.padding = "10px"; div.style.background = "rgba(255,255,255,0.2)";
+                list.appendChild(div);
+            }
+            document.getElementById('answer-count').innerText = `Players: ${Object.keys(players).length}`;
+        });
+
+        socket.on('new_question', (q) => {
+            gameState = 'question';
+            switchView('question-view');
+            
+            document.getElementById('main-btn').innerText = "Skip / End Question";
+            document.getElementById('answer-count').innerText = "Answers: 0";
+            
+            document.getElementById('question-text').innerText = q.question;
+            document.getElementById('optA').innerText = q.option_a; document.getElementById('optA').className = "opt A";
+            document.getElementById('optB').innerText = q.option_b; document.getElementById('optB').className = "opt B";
+            document.getElementById('optC').innerText = q.option_c; document.getElementById('optC').className = "opt C";
+            document.getElementById('optD').innerText = q.option_d; document.getElementById('optD').className = "opt D";
+
+            // --- START AUDIO ---
+            bgMusic.currentTime = 0; // Rewind to start
+            bgMusic.play().catch(e => console.log("Audio play failed (user interaction needed first):", e));
+
+            startTimer(q.duration);
+        });
+
+        socket.on('update_answer_count', (data) => {
+            document.getElementById('answer-count').innerText = `Answers: ${data.count} / ${data.total}`;
+        });
+
+        socket.on('round_over', (players) => {
+            gameState = 'results';
+            stopTimer(); // This also stops the music now
+            document.getElementById('main-btn').innerText = "Next (Leaderboard)";
+            document.getElementById('timer-circle').innerText = "End";
+        });
+
+        socket.on('show_leaderboard', (top5) => {
+            gameState = 'leaderboard';
+            switchView('leaderboard-view');
+            document.getElementById('main-btn').innerText = "Next Question";
+
+            const list = document.getElementById('lb-list');
+            list.innerHTML = "";
+            top5.forEach((p, index) => {
+                let div = document.createElement('div');
+                div.className = 'lb-entry';
+                div.innerHTML = `<span class="lb-name">${index+1}. ${p.name}</span> <span>${p.score} pts</span>`;
+                list.appendChild(div);
+            });
+        });
+
+        socket.on('game_over', (players) => {
+            alert("GAME OVER! Check Leaderboard for winner.");
+            gameState = 'leaderboard';
+            socket.emit('request_leaderboard');
+            document.getElementById('main-btn').style.display = 'none';
+        });
+
+        // --- Timer Helper ---
+        function startTimer(duration) {
+            clearInterval(timerInterval);
+            let timeLeft = duration;
+            const timerDiv = document.getElementById('timer-circle');
+            timerDiv.innerText = timeLeft;
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDiv.innerText = timeLeft;
+                if(timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    socket.emit('time_up');
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            // --- STOP AUDIO ---
+            bgMusic.pause();
+        }
+
+    </script>
+
+</body>
+</html>

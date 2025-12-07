@@ -3,38 +3,88 @@
 <head>
     <title>Kahoot Clone - Host</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
     <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f2f2f2; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; background: #f2f2f2; margin: 0; padding: 0; overflow: hidden; }
         
-        /* Layout Containers */
-        .view-section { display: none; padding: 20px; height: 100vh; box-sizing: border-box;}
-        #lobby-view { display: block; background: #46178f; color: white; }
+        /* --- LAYOUTS --- */
+        /* Updated with Flex Column to fix full-screen layout issues */
+        .view-section { 
+            display: none; 
+            padding: 20px; 
+            height: 100vh; 
+            box-sizing: border-box; 
+            position: relative;
+            flex-direction: column; /* Stacks items vertically */
+            width: 100%;
+        }
+        
+        #lobby-view { background: #46178f; color: white; }
         #question-view { background: white; }
         #leaderboard-view { background: #3e147f; color: white; }
+        #final-view { background: #18003a; color: white; display: none; }
 
-        /* Timer */
+        /* --- FINAL PODIUM STYLES --- */
+        #podium-container {
+            display: flex; align-items: flex-end; justify-content: center;
+            height: 60%; width: 100%; gap: 20px; margin-top: 50px;
+        }
+        .podium-column {
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            width: 150px; opacity: 0; transition: opacity 1s, transform 1s; transform: translateY(50px);
+        }
+        .podium-block {
+            width: 100%; background: linear-gradient(to bottom, #864cbf, #46178f);
+            border-top: 5px solid #fff; position: relative;
+        }
+        .podium-rank { font-size: 3em; font-weight: bold; margin-bottom: 10px; }
+        .podium-name { font-size: 1.5em; font-weight: bold; margin-bottom: 10px; word-wrap: break-word;}
+        .podium-score { font-size: 1.2em; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 10px; margin-bottom: 10px;}
+
+        .p-1 { height: 300px; order: 2; } /* Winner */
+        .p-2 { height: 200px; order: 1; } /* Left */
+        .p-3 { height: 130px; order: 3; } /* Right */
+
+        #runners-up {
+            display: flex; justify-content: center; gap: 40px; margin-top: 30px;
+            font-size: 1.5em;
+        }
+        .runner-card { background: rgba(255,255,255,0.1); padding: 15px 30px; border-radius: 50px; }
+
+        /* --- QUESTION VIEW STYLES --- */
         #timer-circle {
             width: 80px; height: 80px; border-radius: 50%; 
             background: #864cbf; color: white; font-size: 2.5em; 
-            line-height: 80px; margin: 20px auto; 
+            line-height: 80px; margin: 20px auto; flex-shrink: 0;
         }
-
-        /* Question Styles */
-        #question-text { font-size: 2.5em; margin-bottom: 30px; }
-        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; height: 50vh; }
+        #question-text { 
+            font-size: 2.5em; margin-bottom: 20px; flex-shrink: 0;
+        }
+        /* Updated Options Grid to fill remaining space */
+        .options { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+            flex-grow: 1; /* Expands to fill screen */
+            width: 100%;
+            margin-bottom: 70px;
+        }
         .opt { display: flex; align-items: center; justify-content: center; color: white; font-size: 2em; font-weight: bold; border-radius: 5px;}
-        
         .A { background: #e21b3c; } .B { background: #1368ce; }
         .C { background: #d89e00; } .D { background: #26890c; }
         
-        /* Dim incorrect answers during reveal */
-        .dimmed { opacity: 0.2; }
+        #round-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); color: white; z-index: 999;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        #overlay-text { font-size: 5em; font-weight: bold; text-transform: uppercase; }
 
-        /* Footer / Status Bar */
         #status-bar {
             position: fixed; bottom: 0; left: 0; right: 0; 
             background: #333; color: white; padding: 15px;
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex; justify-content: space-between; align-items: center; z-index: 100;
         }
         button#main-btn {
             padding: 10px 20px; font-size: 1.2em; cursor: pointer;
@@ -42,17 +92,26 @@
         }
 
         /* Leaderboard Styles */
+        #lb-container { position: relative; width: 60%; margin: 0 auto; height: 600px; }
         .lb-entry {
-            background: rgba(255,255,255,0.1); margin: 10px auto; 
-            padding: 15px; width: 60%; font-size: 1.5em;
-            display: flex; justify-content: space-between; border-radius: 5px;
+            position: absolute; left: 0; right: 0; height: 60px;
+            background: rgba(255,255,255,0.1); padding: 10px 20px; font-size: 1.5em;
+            display: flex; justify-content: space-between; align-items: center;
+            border-radius: 5px; transition: top 0.6s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .lb-name { font-weight: bold; }
+        .lb-rank { font-weight: bold; width: 40px; }
+        .lb-name { flex-grow: 1; text-align: left; margin-left: 20px;}
+        .lb-score { font-family: monospace; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="lobby-view" class="view-section">
+    <div id="round-overlay">
+        <div id="overlay-text">Time's Up!</div>
+    </div>
+
+    <div id="lobby-view" class="view-section" style="display:flex;">
         <h1>Join at IP:5000</h1>
         <h2>Waiting for players...</h2>
         <div id="lobby-player-list" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
@@ -61,7 +120,6 @@
     <div id="question-view" class="view-section">
         <div id="question-text">Question goes here...</div>
         <div id="timer-circle">30</div>
-        
         <div class="options" id="options-display">
             <div class="opt A" id="optA"></div>
             <div class="opt B" id="optB"></div>
@@ -72,50 +130,160 @@
 
     <div id="leaderboard-view" class="view-section">
         <h1>Leaderboard</h1>
-        <div id="lb-list"></div>
+        <div id="lb-container"></div>
+    </div>
+
+    <div id="final-view" class="view-section">
+        <h1>GAME OVER</h1>
+        
+        <div id="podium-container">
+            <div class="podium-column p-2" id="podium-2">
+                <div class="podium-rank">2</div>
+                <div class="podium-name" id="name-2"></div>
+                <div class="podium-score" id="score-2"></div>
+                <div class="podium-block"></div>
+            </div>
+            
+            <div class="podium-column p-1" id="podium-1">
+                <div class="podium-rank">1</div>
+                <div class="podium-name" id="name-1"></div>
+                <div class="podium-score" id="score-1"></div>
+                <div class="podium-block"></div>
+            </div>
+
+            <div class="podium-column p-3" id="podium-3">
+                <div class="podium-rank">3</div>
+                <div class="podium-name" id="name-3"></div>
+                <div class="podium-score" id="score-3"></div>
+                <div class="podium-block"></div>
+            </div>
+        </div>
+
+        <div id="runners-up"></div>
     </div>
 
     <div id="status-bar">
         <div id="answer-count">Answers: 0</div>
         <button id="main-btn" onclick="handleMainButton()">Start Game</button>
     </div>
-<script>
+
+    <script>
         const socket = io();
         let timerInterval;
         let gameState = 'lobby'; 
+        let lbCache = {}; 
         
-        // --- AUDIO SETUP ---
-        // We create the audio object once. 
-        // Ensure 'music.mp3' exists in your 'static' folder.
-        const bgMusic = new Audio('/static/music.mp3');
-        bgMusic.loop = true;  // Loop if the question is long
-        bgMusic.volume = 0.5; // Set volume (0.0 to 1.0)
+        // --- AUDIO ---
+        const bgMusic = new Audio('/static/music.mp3'); bgMusic.loop = true; bgMusic.volume = 0.5;
+        const gongSound = new Audio('/static/gong.mp3'); 
+        const trumpetSound = new Audio('/static/trumpet.mp3');
+        const pointsSound = new Audio('/static/points.mp3'); // <--- NEW SOUND
 
-        // --- Navigation Logic ---
+        // --- NAVIGATION ---
         function handleMainButton() {
-            const btn = document.getElementById('main-btn');
-
-            if (gameState === 'lobby') {
-                socket.emit('next_question');
-            } 
-            else if (gameState === 'question') {
-                socket.emit('time_up');
-            }
-            else if (gameState === 'results') {
-                socket.emit('request_leaderboard');
-            }
-            else if (gameState === 'leaderboard') {
-                socket.emit('next_question');
-            }
+            if (gameState === 'lobby') socket.emit('next_question');
+            else if (gameState === 'question') socket.emit('time_up');
+            else if (gameState === 'leaderboard') socket.emit('next_question');
+            else if (gameState === 'game_over') location.reload();
         }
 
         function switchView(viewId) {
             document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-            document.getElementById(viewId).style.display = 'block';
+            // 'flex' is critical for the column layout to work
+            document.getElementById(viewId).style.display = 'flex'; 
         }
 
-        // --- Socket Events ---
+        // --- PODIUM ANIMATION ---
+        function runFinalPodium(players) {
+            switchView('final-view');
+            gameState = 'game_over';
+            document.getElementById('main-btn').innerText = "New Game";
+            document.getElementById('status-bar').style.display = 'none';
 
+            const sorted = Object.values(players).sort((a,b) => b.score - a.score);
+            const top5 = sorted.slice(0, 5);
+
+            if(top5[0]) fillPodium('1', top5[0]); 
+            if(top5[1]) fillPodium('2', top5[1]); 
+            if(top5[2]) fillPodium('3', top5[2]); 
+            
+            const runnerContainer = document.getElementById('runners-up');
+            runnerContainer.innerHTML = '';
+            if(top5[3]) runnerContainer.innerHTML += `<div class="runner-card">4. ${top5[3].name} (${top5[3].score})</div>`;
+            if(top5[4]) runnerContainer.innerHTML += `<div class="runner-card">5. ${top5[4].name} (${top5[4].score})</div>`;
+
+            setTimeout(() => { if(top5[2]) showPodium('3'); }, 5000);
+            setTimeout(() => { if(top5[1]) showPodium('2'); }, 10000);
+            setTimeout(() => { 
+                if(top5[3]) {
+                    showPodium('1');
+                    trumpetSound.play().catch(e=>console.log(e));
+                    fireConfetti();
+                }
+            }, 15000);
+        }
+
+        function fillPodium(rank, p) {
+            document.getElementById(`name-${rank}`).innerText = p.name;
+            document.getElementById(`score-${rank}`).innerText = p.score;
+        }
+
+        function showPodium(rank) {
+            const el = document.getElementById(`podium-${rank}`);
+            el.style.opacity = '1'; el.style.transform = 'translateY(0)';
+        }
+
+        function fireConfetti() {
+            var duration = 5 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) { return clearInterval(interval); }
+                var particleCount = 50 * (timeLeft / duration);
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+            }, 250);
+        }
+        function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+
+        // --- LEADERBOARD LOGIC ---
+        function renderLeaderboard(top5) {
+            const container = document.getElementById('lb-container');
+            for(let key in lbCache) lbCache[key].active = false;
+            top5.forEach((p, index) => {
+                let entry = lbCache[p.name];
+                let oldScore = 0;
+                if (!entry) {
+                    const el = document.createElement('div');
+                    el.className = 'lb-entry'; el.style.top = '600px'; 
+                    el.innerHTML = `<span class="lb-rank"></span><span class="lb-name">${p.name}</span><span class="lb-score">0</span>`;
+                    container.appendChild(el);
+                    entry = { element: el, currentScore: 0 }; lbCache[p.name] = entry;
+                } else { oldScore = entry.currentScore; }
+                entry.active = true;
+                setTimeout(() => { entry.element.style.top = (index * 90) + 'px'; }, 50);
+                entry.element.querySelector('.lb-rank').innerText = (index + 1);
+                if (oldScore !== p.score) {
+                    animateValue(entry.element.querySelector('.lb-score'), oldScore, p.score, 1500);
+                    entry.currentScore = p.score;
+                }
+            });
+            for(let key in lbCache) { if(!lbCache[key].active) { lbCache[key].element.remove(); delete lbCache[key]; } }
+        }
+
+        function animateValue(obj, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = Math.floor(progress * (end - start) + start);
+                if (progress < 1) window.requestAnimationFrame(step);
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // --- SOCKETS ---
         socket.on('update_player_list', (players) => {
             if(gameState !== 'lobby') return;
             const list = document.getElementById('lobby-player-list');
@@ -130,22 +298,16 @@
         });
 
         socket.on('new_question', (q) => {
-            gameState = 'question';
-            switchView('question-view');
-            
-            document.getElementById('main-btn').innerText = "Skip / End Question";
+            gameState = 'question'; switchView('question-view');
+            document.getElementById('round-overlay').style.display = 'none';
+            document.getElementById('main-btn').innerText = "Skip Question";
             document.getElementById('answer-count').innerText = "Answers: 0";
-            
             document.getElementById('question-text').innerText = q.question;
-            document.getElementById('optA').innerText = q.option_a; document.getElementById('optA').className = "opt A";
-            document.getElementById('optB').innerText = q.option_b; document.getElementById('optB').className = "opt B";
-            document.getElementById('optC').innerText = q.option_c; document.getElementById('optC').className = "opt C";
-            document.getElementById('optD').innerText = q.option_d; document.getElementById('optD').className = "opt D";
-
-            // --- START AUDIO ---
-            bgMusic.currentTime = 0; // Rewind to start
-            bgMusic.play().catch(e => console.log("Audio play failed (user interaction needed first):", e));
-
+            document.getElementById('optA').innerText = q.option_a; 
+            document.getElementById('optB').innerText = q.option_b; 
+            document.getElementById('optC').innerText = q.option_c; 
+            document.getElementById('optD').innerText = q.option_d;
+            bgMusic.currentTime = 0; bgMusic.play().catch(e=>console.log(e));
             startTimer(q.duration);
         });
 
@@ -154,58 +316,42 @@
         });
 
         socket.on('round_over', (players) => {
-            gameState = 'results';
-            stopTimer(); // This also stops the music now
-            document.getElementById('main-btn').innerText = "Next (Leaderboard)";
-            document.getElementById('timer-circle').innerText = "End";
+            gameState = 'results'; stopTimer();
+            gongSound.currentTime = 0; gongSound.play().catch(e => console.log(e));
+            const overlay = document.getElementById('round-overlay');
+            overlay.style.display = 'flex';
+            document.getElementById('main-btn').innerText = "Loading Leaderboard...";
+            setTimeout(() => { overlay.style.display = 'none'; socket.emit('request_leaderboard'); }, 5000); 
         });
 
         socket.on('show_leaderboard', (top5) => {
-            gameState = 'leaderboard';
-            switchView('leaderboard-view');
+            gameState = 'leaderboard'; switchView('leaderboard-view');
             document.getElementById('main-btn').innerText = "Next Question";
-
-            const list = document.getElementById('lb-list');
-            list.innerHTML = "";
-            top5.forEach((p, index) => {
-                let div = document.createElement('div');
-                div.className = 'lb-entry';
-                div.innerHTML = `<span class="lb-name">${index+1}. ${p.name}</span> <span>${p.score} pts</span>`;
-                list.appendChild(div);
-            });
+            
+            // --- PLAY POINTS SOUND ---
+            pointsSound.currentTime = 0;
+            pointsSound.play().catch(e=>console.log(e));
+            
+            renderLeaderboard(top5);
         });
 
         socket.on('game_over', (players) => {
-            alert("GAME OVER! Check Leaderboard for winner.");
-            gameState = 'leaderboard';
-            socket.emit('request_leaderboard');
-            document.getElementById('main-btn').style.display = 'none';
+            stopTimer();
+            runFinalPodium(players);
         });
 
-        // --- Timer Helper ---
         function startTimer(duration) {
             clearInterval(timerInterval);
             let timeLeft = duration;
             const timerDiv = document.getElementById('timer-circle');
             timerDiv.innerText = timeLeft;
-
             timerInterval = setInterval(() => {
-                timeLeft--;
-                timerDiv.innerText = timeLeft;
-                if(timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    socket.emit('time_up');
-                }
+                timeLeft--; timerDiv.innerText = timeLeft;
+                if(timeLeft <= 0) { clearInterval(timerInterval); socket.emit('time_up'); }
             }, 1000);
         }
 
-        function stopTimer() {
-            clearInterval(timerInterval);
-            // --- STOP AUDIO ---
-            bgMusic.pause();
-        }
-
+        function stopTimer() { clearInterval(timerInterval); bgMusic.pause(); }
     </script>
-
 </body>
 </html>

@@ -1,17 +1,38 @@
 import csv
-import time  # <--- NEW IMPORT
+import time
+import os
+import random  # <--- NEW IMPORT
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
+from flask_httpauth import HTTPDigestAuth
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
+# --- AUTHENTICATION SETUP ---
+auth = HTTPDigestAuth()
+
+@auth.get_password
+def get_password(username):
+    try:
+        with open('.auth', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if ':' in line:
+                    user, pw = line.split(':', 1)
+                    if user == username:
+                        return pw
+    except FileNotFoundError:
+        print("ERROR: .auth file missing!")
+        return None
+    return None
+
 # --- Global Game State ---
 players = {}
 questions = []
 current_question_idx = -1
-question_start_time = 0 # <--- NEW GLOBAL TO TRACK TIME
+question_start_time = 0 
 
 # --- Load CSV ---
 def load_questions():
@@ -56,17 +77,35 @@ def reveal_answers():
 
 # --- Routes ---
 @app.route('/')
-def player_view(): return render_template('player.html')
+def player_view(): 
+    return render_template('player.html')
 
 @app.route('/host')
-def host_view(): return render_template('host.html')
+@auth.login_required
+def host_view(): 
+    return render_template('host.html')
 
 # --- Socket Events ---
 @socketio.on('join_game')
 def handle_join(data):
+    # 1. Truncate to 10 characters
+    base_name = data['name'][:10]
+    username = base_name
+
+    # 2. Check for duplicates and resolve
+    # Create a list of current names for checking
+    existing_names = [p['name'] for p in players.values()]
+    
+    while username in existing_names:
+        # Add 2 random digits to the original truncated base name
+        username = f"{base_name}{random.randint(10, 99)}"
+    
+    # 3. Add player with unique name
     players[request.sid] = {
-        'name': data['name'], 'score': 0, 
-        'last_answer_status': 'waiting', 'pending_score': 0
+        'name': username, 
+        'score': 0, 
+        'last_answer_status': 'waiting', 
+        'pending_score': 0
     }
     emit('update_player_list', players, broadcast=True)
 
@@ -85,7 +124,7 @@ def handle_next_question():
     # 2. Send Question and START TIMER
     if current_question_idx < len(questions):
         q = questions[current_question_idx]
-        question_start_time = time.time() # <--- START CLOCK
+        question_start_time = time.time() 
         emit('new_question', q, broadcast=True)
     else:
         emit('game_over', players, broadcast=True)
@@ -111,24 +150,15 @@ def handle_answer(data):
         correct = q['correct_answer']
         
         if data['answer'] == correct:
-            # --- NEW SCORING LOGIC ---
             duration = q['duration']
-            # Calculate time taken
             time_taken = time.time() - question_start_time
-            
-            # Clamp values (in case of lag/latency)
             time_taken = max(0, min(time_taken, duration))
-            
-            # Formula: 1000 * (1 - (TimeTaken / TotalTime / 2))
-            # If taken 0s (instant) -> 1000 * (1 - 0) = 1000
-            # If taken 30s (full)   -> 1000 * (1 - 0.5) = 500
             score_calc = 1000 * (1 - ((time_taken / duration) / 2))
             
             players[request.sid]['pending_score'] = int(score_calc)
         else:
             players[request.sid]['pending_score'] = 0
 
-    # Count answers
     total = len(players)
     answered_count = sum(1 for p in players.values() if p['last_answer_status'] != 'waiting')
     
