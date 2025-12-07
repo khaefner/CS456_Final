@@ -1,0 +1,31 @@
+Question,Answer 1,Answer 2,Answer 3,Answer 4,Time (sec),Correct Answer
+What does the 'C' in CIA Triad stand for?,Control,Confidentiality,Correction,Computer,30,2
+Which CIA component ensures data is trustworthy and accurate?,Confidentiality,Availability,Integrity,Authorization,20,3
+Ransomware primarily attacks which CIA component?,Confidentiality,Integrity,Availability,Authenticity,30,3
+What is a weakness in a system called?,Threat,Risk,Asset,Vulnerability,30,4
+Which hacker type has malicious intent?,White Hat,Blue Hat,Black Hat,Grey Hat,30,3
+Which security team acts as the defender?,Red Team,Blue Team,Purple Team,Green Team,30,2
+Which is Layer 1 of the OSI Model?,Network,Data Link,Physical,Transport,30,3
+Routers operate at which OSI layer?,Layer 1,Layer 2,Layer 3,Layer 4,30,3
+What protocol works at the Transport Layer?,IP,TCP,HTTP,FTP,30,2
+What is the first step in a TCP 3-way handshake?,ACK,SYN-ACK,SYN,FIN,30,3
+What does ARP map?,IP to MAC,MAC to Port,URL to IP,Domain to IP,30,1
+Which protocol is used for secure remote desktop?,SSH,Telnet,RDP,FTP,30,3
+Which Nmap scan is considered 'stealthy'?,Connect Scan,Ping Scan,UDP Scan,SYN Scan,30,4
+Which firewall type tracks active connection states?,Stateless,Stateful,Packet Filter,Proxy,30,2
+Which XSS type is saved permanently on the server?,Reflected,DOM-based,Stored,Client-side,30,3
+Which header helps prevent XSS?,Content Security Policy,X-Frame-Options,HSTS,Access-Control-Allow-Origin,30,1
+What is the best defense against SQL Injection?,Input Sanitization,WAF,Parameterized Queries,Encryption,30,3
+What does SSRF stand for?,Server-Side Request Forgery,Secure Socket Request Format,Simple Service Request File,Server Script Remote Function,30,1
+Which attack involves flooding a network with traffic?,Phishing,DDoS,SQL Injection,XSS,30,2
+Which encryption method uses two different keys?,Symmetric,Asymmetric,Hashing,Encoding,30,2
+What is the output of hashing data called?,Ciphertext,Plaintext,Digest,Key,30,3
+Why is salt added to passwords?,To make them shorter,To encrypt them,Defend rainbow tables,To speed up hashing,30,3
+Which wireless protocol introduced SAE?,WEP,WPA,WPA2,WPA3,30,4
+What mechanism does Wi-Fi use to avoid collisions?,CSMA/CD,CSMA/CA,Token Passing,Polling,30,2
+"In forensics, which data should be collected first?",Hard Drive,RAM,CPU Registers/Cache,Backup Tapes,30,3
+What proves evidence hasn't been tampered with?,Chain of Custody,Hash value,Timestamp,Log file,30,1
+Who manages the OS in the IaaS model?,The Provider,The Customer,The ISP,The Developer,30,2
+Lateral Movement' allows attackers to do what?,Exfiltrate data,Move through network,Encrypt files,Deface website,30,2
+Which is an example of 'Something you are'?,Password,Smart Card,Fingerprint,PIN,30,3
+What does a 'False Positive' in IDS mean?,Attack missed,Legitimate traffic flagged,System crashed,Firewall failed,30,2
