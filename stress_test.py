@@ -14,6 +14,7 @@ NAMES = [
 ]
 
 async def start_bot(bot_id):
+    avatar_id = random.randint(1, 10)
     # Create a unique client instance for this bot
     sio = socketio.AsyncClient()
     
@@ -24,7 +25,8 @@ async def start_bot(bot_id):
     @sio.event
     async def connect():
         # print(f"[{bot_name}] Connected!")
-        await sio.emit('join_game', {'name': bot_name})
+        #await sio.emit('join_game', {'name': bot_name})
+        await sio.emit('join_game', {'name': bot_name, 'avatar': avatar_id})
 
     @sio.event
     async def new_question(data):

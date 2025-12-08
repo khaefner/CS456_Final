@@ -93,16 +93,16 @@ def handle_join(data):
     username = base_name
 
     # 2. Check for duplicates and resolve
-    # Create a list of current names for checking
     existing_names = [p['name'] for p in players.values()]
-    
     while username in existing_names:
-        # Add 2 random digits to the original truncated base name
         username = f"{base_name}{random.randint(10, 99)}"
     
-    # 3. Add player with unique name
+    # 3. Add player with Avatar (Default to '1' if missing)
+    selected_avatar = data.get('avatar', '1') 
+    
     players[request.sid] = {
         'name': username, 
+        'avatar': selected_avatar,  # <--- NEW FIELD
         'score': 0, 
         'last_answer_status': 'waiting', 
         'pending_score': 0
