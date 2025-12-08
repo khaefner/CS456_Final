@@ -61,6 +61,7 @@ questions = load_questions()
 
 # --- Helper: Reveal Answers ---
 def reveal_answers():
+    # 1. Update Scores
     for sid in players:
         if players[sid]['last_answer_status'] == 'waiting':
              players[sid]['last_answer_status'] = 'incorrect'
@@ -72,8 +73,16 @@ def reveal_answers():
             players[sid]['last_answer_status'] = 'correct'
         else:
             players[sid]['last_answer_status'] = 'incorrect'
+    
+    # 2. Get the Correct Option for the current question
+    correct_opt = questions[current_question_idx]['correct_answer']
             
-    emit('round_over', players, broadcast=True)
+    # 3. Emit updated data structure
+    emit('round_over', {
+        'players': players, 
+        'correct_option': correct_opt 
+    }, broadcast=True)
+
 
 # --- Routes ---
 @app.route('/')

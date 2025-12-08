@@ -64,6 +64,20 @@
         button#main-btn { padding: 10px 20px; font-size: 1.2em; cursor: pointer; background: #fff; border: none; border-radius: 4px; color: #333;}
         #round-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); color: white; z-index: 999; justify-content: center; align-items: center; flex-direction: column;}
         #overlay-text { font-size: 5em; font-weight: bold; text-transform: uppercase; }
+        /* Reveal Styles */
+.dimmed { 
+    opacity: 0.2; 
+    transform: scale(0.95); 
+    filter: grayscale(100%);
+    transition: all 0.5s ease;
+}
+.correct-highlight { 
+    transform: scale(1.1); 
+    box-shadow: 0 0 30px #fff; 
+    z-index: 10; 
+    border: 5px solid white;
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
 
     </style>
 </head>
@@ -258,26 +272,65 @@
         }
         function randomInRange(min, max) { return Math.random() * (max - min) + min; }
 
-        socket.on('new_question', (q) => {
-            gameState = 'question'; switchView('question-view');
+          socket.on('new_question', (q) => {
+            gameState = 'question'; 
+            switchView('question-view');
+            
+            // RESET STYLES from previous round
+            document.querySelectorAll('.opt').forEach(el => {
+                el.className = `opt ${el.id.replace('opt', '')}`; // Resets to 'opt A', 'opt B', etc.
+            });
+
             document.getElementById('round-overlay').style.display = 'none';
             document.getElementById('question-text').innerText = q.question;
             document.getElementById('optA').innerText = q.option_a; 
             document.getElementById('optB').innerText = q.option_b; 
             document.getElementById('optC').innerText = q.option_c; 
             document.getElementById('optD').innerText = q.option_d;
-            bgMusic.currentTime = 0; bgMusic.play().catch(e=>{});
+            
+            bgMusic.currentTime = 0; 
+            bgMusic.play().catch(e=>{});
             startTimer(q.duration);
         });
+
         socket.on('update_answer_count', (data) => { document.getElementById('answer-count').innerText = `Answers: ${data.count} / ${data.total}`; });
-        socket.on('round_over', (players) => {
-            gameState = 'results'; stopTimer();
-            gongSound.currentTime = 0; gongSound.play().catch(e => {});
-            const overlay = document.getElementById('round-overlay');
-            overlay.style.display = 'flex';
-            document.getElementById('main-btn').innerText = "Loading Leaderboard...";
-            setTimeout(() => { overlay.style.display = 'none'; socket.emit('request_leaderboard'); }, 5000); 
+
+        socket.on('round_over', (data) => {
+          // 'data' now contains { players: {...}, correct_option: 'A' }
+          gameState = 'results'; 
+          stopTimer();
+          gongSound.currentTime = 0; 
+          gongSound.play().catch(e => {});
+
+          // 1. Show "Time's Up" Overlay
+          const overlay = document.getElementById('round-overlay');
+          overlay.style.display = 'flex';
+          document.getElementById('main-btn').innerText = "Loading Leaderboard...";
+
+          // 2. Wait 2 seconds, then Hide Overlay & Reveal Answer
+          setTimeout(() => {
+              overlay.style.display = 'none';
+              
+              // Highlight the correct answer
+              ['A', 'B', 'C', 'D'].forEach(opt => {
+                  const el = document.getElementById(`opt${opt}`);
+                  if(opt === data.correct_option) {
+                      el.classList.add('correct-highlight');
+                  } else {
+                      el.classList.add('dimmed');
+                  }
+              });
+
+              // 3. Wait 4 more seconds, then show Leaderboard
+              setTimeout(() => {
+                   socket.emit('request_leaderboard'); 
+              }, 4000);
+
+          }, 2000); 
         });
+
+
+
         function startTimer(duration) {
             clearInterval(timerInterval);
             let timeLeft = duration;
